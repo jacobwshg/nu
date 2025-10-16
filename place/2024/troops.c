@@ -118,6 +118,8 @@ example(void)
         count_troops(&empire));
     printf("Total parent troops of %s: %d\n", "Tatooine",
         count_parent_troops_by_name("Tatooine", &empire));
+    printf("Total parent troops of %s: %d\n", "Inner Rim",
+        count_parent_troops_by_name("Inner Rim", &empire));
 }
 
 int 

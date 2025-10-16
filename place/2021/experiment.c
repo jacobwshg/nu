@@ -13,12 +13,27 @@ struct outcome
     char *name;
     struct frac prob;
     struct outcome **children;
-    int num_children;
+    int nchildren;
 };
 
-// Helper
+void 
+outcome_init(struct outcome *outcome, char *name, int n, int d,
+             struct outcome **children, int num_children)
+{
+    if (!outcome)
+    {
+        return;
+    }
+    outcome->name = name;
+    outcome->prob.n = n;
+    outcome->prob.d = d;
+    outcome->children = children;
+    outcome->nchildren = nchildren;
+}
+
+// Helper - count terminal outcomes with OUTCOME as root
 int 
-count_terminal(struct outcome *outcome)
+count_terminal_outcomes(struct outcome *outcome)
 {
     if (!outcome)
     {
@@ -32,15 +47,15 @@ count_terminal(struct outcome *outcome)
     else 
     {
         int count = 0;
-        for (int i = 0; i < outcome->num_children; ++i)
+        for (int i = 0; i < num_children; ++i)
         {
-            count += count_terminal(outcome->children[i]);
+            count += count_terminal_outcomes(outcome->children[i]);
         }
         return count;
     }
 }
 
-// Helper
+// Helper - find OUTCOME's direct child outcome by name
 struct outcome *
 find_child_by_name(struct outcome *parent, char *name)
 {
@@ -79,6 +94,7 @@ event_seq_prob(struct outcome *expm,
             find_child_by_name(current_outcome, event_names[i]);
         if (!child)
         {
+            // Current event in sequence is not a possible child outcome
             prob->n = 0;
             prob->d = 1;
             return;
@@ -95,27 +111,48 @@ event_seq_prob(struct outcome *expm,
     return;
 }
 
+void
+prob_to_string(struct frac *prob, char *buf, size_t buflen)
+{
+    if (!prob || !buf)
+    {
+        return;
+    }
+    int n = prob->n;
+    int d = prob->d;
+    if (!n)
+    {
+        snprintf(buf, buflen, "0");
+    } 
+    else 
+    {
+        snprintf(buf, buflen, "%d/%d", n, d);
+    }
+}
+
 void 
 example1()
 {
     // Example 1
-    struct outcome h1 = {"H", {1, 3}, NULL, 0};
-    struct outcome t1 = {"T", {2, 3}, NULL, 0};
-    struct outcome h2 = {"H", {1, 4}, NULL, 0};
-    struct outcome t2 = {"T", {3, 4}, NULL, 0};
-    struct outcome h3 = {"H", {1, 5}, NULL, 0};
-    struct outcome t3 = {"T", {4, 5}, NULL, 0};
+    struct outcome expm1, c1, c2, c3, h1, t1, h2, t2, h3, t3;
 
+    struct outcome *choices[3] = {&c1, &c2, &c3};
     struct outcome *children1[2] = {&h1, &t1};
     struct outcome *children2[2] = {&h2, &t2};
     struct outcome *children3[2] = {&h3, &t3};
-    struct outcome c1 = {"C1", {1, 3}, children1, 2};
-    struct outcome c2 = {"C2", {1, 3}, children2, 2};
-    struct outcome c3 = {"C3", {1, 3}, children3, 2};
+ 
+    outcome_init(&h1, "H", 1, 3, NULL, 0);
+    outcome_init(&t1, "T", 2, 3, NULL, 0);
+    outcome_init(&h2, "H", 1, 4, NULL, 0);
+    outcome_init(&t2, "T", 3, 4, NULL, 0);
+    outcome_init(&h3, "H", 1, 5, NULL, 0);
+    outcome_init(&t3, "T", 4, 5, NULL, 0);
 
-    struct outcome *choices[3] = {&c1, &c2, &c3};
-    struct outcome expm1 = {"Exp", {1, 1}, choices, 3};
+    outcome_init(&c1, "C1", 1, 3, children1, 2);
+    outcome_init(&c2, "C2", 1, 3, children2, 2);
+    outcome_init(&c3, "C3", 1, 3, children3, 2);
 
+    outcome_init(expm1, "Exp", 1, 1, choices, 3);
 
 }
 
