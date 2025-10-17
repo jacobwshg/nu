@@ -1,10 +1,81 @@
 from board import Board
 from constants import PLAYER1_PIECE_COLOR, PLAYER2_PIECE_COLOR
 from game import Game
+from move_node import MoveNode
+from copy import deepcopy
 import board_configs
 import random
 import unittest
 
+BOARD_SIZE = 8
+
+Fl = (-1, -1)
+Fr = (-1, 1)
+Bl = (1, -1) 
+Br = (1, 1) 
+P1_DIRS = [ Fl, Fr ]
+P2_DIRS = [ Bl, Br ]
+KING_DIRS = P1_DIRS + P2_DIRS
+
+def addpairs(p1, p2):
+    return ( p1[0] + p2[0], p1[1] + p2[1] )
+
+def piece_has_color(pcval, color):
+    return ( pcval % 10 == 1 and color == PLAYER1_PIECE_COLOR )\
+           or ( pcval % 10 == 2 and color == PLAYER2_PIECE_COLOR ) 
+
+def piece_in_bounds( rowno, colno ):
+    return (rowno>=0) and (rowno<BOARD_SIZE) and (colno>=0) and (colno<BOARD_SIZE)
+
+def get_color_moves(board, game, color_pieces):
+    """
+    Generate a fringe of MoveNodes for possible moves of 
+    all pieces of a given color
+    """
+    moves = []
+
+    color = None
+
+    def get_piece_moves(piece):
+        nonlocal color
+        if not color:
+            # obtain player color from initial piece
+            color = piece.color
+        elif piece.color != color:
+            return
+
+        dirs = []
+        if piece.king:
+            dirs = KING_DIRS
+        elif color == PLAYER1_PIECE_COLOR:
+            dirs = P1_DIRS
+        else:
+            dirs = P2_DIRS
+
+        row, col = piece.row, piece.col
+        for d in dirs:
+            newrow, newcol = addpairs((row, col), d)
+            if piece_in_bounds(newrow, newcol):
+                target_piece = board.get_piece(newrow, newcol)
+                if target_piece == 0:
+                    # empty cell
+                    kh = game.check_king_hopeful(piece, newrow, row, col)
+                    moves.append(MoveNode((newrow, newcol), None, kh))
+                else:
+                    # target cell has piece; tentatively compute position after skipping
+                    hoprow, hopcol = addpairs((newrow, newcol), d)
+                    if target_piece.color != color \
+                       and piece_in_bounds(hoprow, hopcol) \
+                       and board.get_piece(hoprow, hopcol) == 0:
+                        # piece in target cell has other color,
+                        # and we can indeed skip within bounds
+                        kh = game.check_king_hopeful(piece, hoprow, row, col)
+                        moves.append(MoveNode((hoprow, hopcol), target_piece, kh))
+
+    for pc in color_pieces:
+        get_piece_moves(pc)
+
+    return moves 
 
 # TO DO: Implement this function. The four lines currently implemented including the return are in place to make the
 # gameplay visualization work. Replace all of it with your own code for the function.
@@ -27,9 +98,15 @@ def minimax_alpha_beta(board, depth, alpha, beta, max_player, game, eval_params=
                 - best_move (Board): The board state after the best move
         """
 
+    #'''
     score = 1
-    moves = game.generate_all_moves(board, PLAYER2_PIECE_COLOR)
     best_move = random.choice(moves)
+    #'''
+
+
+    moves = game.generate_all_moves(board, PLAYER2_PIECE_COLOR)
+    if depth == 0 or not moves:
+        return evaluate(board), board
 
     return score, best_move
 
@@ -98,8 +175,28 @@ def counts(board, game, color):
         - num_opportunities (int): The total number of capture opportunities across all pieces of the specified color
         - num_king_hopefuls (int): The total number of moves that lead to king promotions for the specified color.
     """
+    num_pieces = 0
+    num_kings = 0
+    num_moves = 0
+    num_opportunities = 0
+    num_king_hopefuls = 0
 
-    pass
+    color_pieces = board.get_all_pieces(color)
+    color_moves = get_color_moves(board, game, color_pieces)
+
+    for pc in color_pieces:
+        num_pieces += 1
+        if pc.king:
+            num_kings += 1
+
+    for mv in color_moves:
+        num_moves += 1
+        if mv.capture is not None:
+            num_opportunities += 1
+        if mv.king_hopeful is not None:
+            num_king_hopefuls += 1 
+
+    return num_pieces, num_kings, num_moves, num_opportunities, num_king_hopefuls
 
 def compare_boards(board1, board2):
     """
@@ -399,3 +496,8 @@ class AiTest(unittest.TestCase):
         true_board = Board(board_configs.board_config28)
 
         self.assertTrue(compare_boards(new_board, true_board))
+
+if __name__ == "__main__":
+    tst = AiTest()
+    tst.test_counts_with_boards()
+
