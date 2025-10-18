@@ -27,10 +27,10 @@ def piece_has_color(pcval, color):
 def piece_in_bounds( rowno, colno ):
     return (rowno>=0) and (rowno<BOARD_SIZE) and (colno>=0) and (colno<BOARD_SIZE)
 
-def get_color_moves(board, game, color_pieces):
+def get_color_moves_by_pieces(board, game, color_pieces):
     """
-    Generate a fringe of MoveNodes for possible moves of 
-    all pieces of a given color
+    Generate a fringe of (row, col, move_node) tuples for possible moves of 
+    all pieces of a given color, where row and col are prior to a move
     """
     moves = []
 
@@ -60,7 +60,7 @@ def get_color_moves(board, game, color_pieces):
                 if target_piece == 0:
                     # empty cell
                     kh = game.check_king_hopeful(piece, newrow, row, col)
-                    moves.append(MoveNode((newrow, newcol), None, kh))
+                    moves.append( (row, col, MoveNode((newrow, newcol), None, kh)) )
                 else:
                     # target cell has piece; tentatively compute position after skipping
                     hoprow, hopcol = addpairs((newrow, newcol), d)
@@ -70,12 +70,15 @@ def get_color_moves(board, game, color_pieces):
                         # piece in target cell has other color,
                         # and we can indeed skip within bounds
                         kh = game.check_king_hopeful(piece, hoprow, row, col)
-                        moves.append(MoveNode((hoprow, hopcol), target_piece, kh))
+                        moves.append( (row, col, MoveNode((hoprow, hopcol), target_piece, kh)) )
 
     for pc in color_pieces:
         get_piece_moves(pc)
 
     return moves 
+
+def get_color_moves(board, game, color):
+    return get_color_moves_by_pieces(board, game, board.get_all_pieces(color))
 
 # TO DO: Implement this function. The four lines currently implemented including the return are in place to make the
 # gameplay visualization work. Replace all of it with your own code for the function.
@@ -100,14 +103,47 @@ def minimax_alpha_beta(board, depth, alpha, beta, max_player, game, eval_params=
 
     #'''
     score = 1
-    best_move = random.choice(moves)
+    #best_move = random.choice(moves)
     #'''
 
+    # moves = game.generate_all_moves(board, PLAYER2_PIECE_COLOR)
+    if (depth == 0) or game.winner() is not None:
+        return evaluate(board, game), board
 
-    moves = game.generate_all_moves(board, PLAYER2_PIECE_COLOR)
-    if depth == 0 or not moves:
-        return evaluate(board), board
+    color = PLAYER2_PIECE_COLOR if max_player else PLAYER1_PIECE_COLOR 
+    color_moves = get_color_moves(board, game, color)
 
+    new_boards = []
+    for row, col, mvnd in color_moves:
+        board_cpy = deepcopy(board)
+        ##print(f"capture: {mvnd.capture}")
+        new_boards.append(\
+            game.simulate_move(\
+                board_cpy.get_piece(row, col),\
+                mvnd.move,\
+                board_cpy,\
+                [mvnd.capture] if mvnd.capture else None\
+            )
+        )
+
+    best_move = board
+
+    for nbd in new_boards:
+        nbd_score, _ = minimax_alpha_beta(nbd, depth-1, alpha, beta, not max_player, game, eval_params)
+        if max_player and (nbd_score > alpha):
+            if nbd_score > beta:
+                return alpha, best_move
+            else:
+                alpha = nbd_score
+                best_move = nbd
+        elif (not max_player) and (nbd_score < beta):
+            if nbd_score < alpha:
+                return beta, best_move
+            else:
+                beta = nbd_score
+                best_move = nbd
+
+    score = alpha if max_player else beta
     return score, best_move
 
 def evaluate(board, game, pieces_weight=1.0, kings_weight=1.0, moves_weight=0.0, opportunities_weight=0.0, king_hopefuls_weight=0.0):
@@ -182,18 +218,18 @@ def counts(board, game, color):
     num_king_hopefuls = 0
 
     color_pieces = board.get_all_pieces(color)
-    color_moves = get_color_moves(board, game, color_pieces)
+    color_moves = get_color_moves_by_pieces(board, game, color_pieces)
 
     for pc in color_pieces:
         num_pieces += 1
         if pc.king:
             num_kings += 1
 
-    for mv in color_moves:
+    for _, _, mvnd in color_moves:
         num_moves += 1
-        if mv.capture is not None:
+        if mvnd.capture is not None:
             num_opportunities += 1
-        if mv.king_hopeful is not None:
+        if mvnd.king_hopeful is not None:
             num_king_hopefuls += 1 
 
     return num_pieces, num_kings, num_moves, num_opportunities, num_king_hopefuls
@@ -500,4 +536,6 @@ class AiTest(unittest.TestCase):
 if __name__ == "__main__":
     tst = AiTest()
     tst.test_counts_with_boards()
+    tst.test_evaluate_1()
+    tst.test_minimax_alpha_beta_16()
 
